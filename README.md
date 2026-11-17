@@ -1133,8 +1133,8 @@ My next goal is to continue improving the framework, strengthen its reporting ca
 - Security auditing
 - Infrastructure remediation
 - Network security
-- YAML and Jinja2
-
+- YAML
+  
 **Project repository:** [Insert your public GitHub repository URL]
 
 **Technical portfolio:** [https://jahmeeu-cloud.github.io/portfolio-project/](https://jahmeeu-cloud.github.io/portfolio-project/)

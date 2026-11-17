@@ -205,7 +205,7 @@ The inventory referenced a private-key path that did not match the actual locati
 The investigation identified the intended key location:
 
 ```text
-/home/horla/.ssh/cloud-horla.pem
+/home/cloud/.ssh/Your-key.pem
 ```
 
 I restricted access to the private key:
@@ -244,7 +244,7 @@ compliance-server-02 ansible_host=YOUR_SERVER_02_IP
 
 [compliance_servers:vars]
 ansible_user=ubuntu
-ansible_ssh_private_key_file=/home/YOUR_USER/.ssh/cloud-horla.pem
+ansible_ssh_private_key_file=/home/YOUR_USER/.ssh/Your-key.pem
 ```
 
 The IP addresses above are placeholders. Use your current server addresses when configuring your own environment.

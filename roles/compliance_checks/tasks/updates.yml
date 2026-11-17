@@ -1,0 +1,72 @@
+
+---
+# System package update compliance audit
+
+- name: Check Ubuntu security repository configuration
+  ansible.builtin.shell:
+    cmd: |
+      grep -R -E 'security.ubuntu.com|noble-security' \
+        /etc/apt/sources.list \
+        /etc/apt/sources.list.d/ 2>/dev/null || true
+  register: security_repository_config
+  changed_when: false
+  check_mode: false
+
+- name: Inspect available package updates
+  ansible.builtin.shell:
+    cmd: |
+      export LC_ALL=C
+      apt list --upgradable 2>/dev/null | tail -n +2
+  register: available_package_updates
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Identify packages with security updates available
+  ansible.builtin.set_fact:
+    security_updates_available: >-
+      {{
+        available_package_updates.stdout_lines
+        | select('search', '/[^ ]*noble-security')
+        | list
+      }}
+
+- name: Evaluate package update compliance
+  ansible.builtin.set_fact:
+    security_repository_status: >-
+      {{
+        'PASS'
+        if security_repository_config.stdout | trim | length > 0
+        else 'FAIL'
+      }}
+    security_updates_status: >-
+      {{
+        'ERROR'
+        if available_package_updates.rc != 0
+        else (
+          'FAIL'
+          if security_updates_available | length > 0
+          else 'PASS'
+        )
+      }}
+    general_updates_status: >-
+      {{
+        'FAIL'
+        if available_package_updates.stdout_lines | length > 0
+        else 'PASS'
+      }}
+
+- name: Display package update compliance results
+  ansible.builtin.debug:
+    msg:
+      host: "{{ inventory_hostname }}"
+      security_repository:
+        status: "{{ security_repository_status }}"
+        configured_sources: "{{ security_repository_config.stdout_lines }}"
+      security_updates:
+        status: "{{ security_updates_status }}"
+        count: "{{ security_updates_available | length }}"
+        packages: "{{ security_updates_available }}"
+      all_available_updates:
+        status: "{{ general_updates_status }}"
+        count: "{{ available_package_updates.stdout_lines | length }}"

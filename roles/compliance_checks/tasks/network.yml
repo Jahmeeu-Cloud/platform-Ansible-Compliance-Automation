@@ -1,0 +1,107 @@
+
+---
+# Network security compliance audit
+
+- name: Inspect effective network kernel parameters
+  ansible.builtin.shell:
+    cmd: |
+      sysctl -a 2>/dev/null |
+      grep -E '^net\.ipv4\.ip_forward|^net\.ipv4\.conf\..*\.(accept_redirects|send_redirects)|^net\.ipv6\.conf\..*\.(forwarding|accept_redirects)'
+  register: network_sysctl_values
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Inspect persistent network security configuration
+  ansible.builtin.shell:
+    cmd: |
+      grep -RnsE '^[[:space:]]*net\.(ipv4\.ip_forward|ipv4\.conf\..*\.(accept_redirects|send_redirects)|ipv6\.conf\..*\.(forwarding|accept_redirects))' \
+        /etc/sysctl.conf /etc/sysctl.d/ /usr/lib/sysctl.d/ 2>/dev/null || true
+  register: persistent_network_config
+  changed_when: false
+  check_mode: false
+
+- name: Identify non-compliant network parameters
+  ansible.builtin.set_fact:
+    ipv4_forwarding_findings: >-
+      {{
+        network_sysctl_values.stdout_lines
+        | select('match', '^net\.ipv4\.ip_forward = [^0]')
+        | list
+      }}
+    ipv4_accept_redirect_findings: >-
+      {{
+        network_sysctl_values.stdout_lines
+        | select('match', '^net\.ipv4\.conf\..*\.accept_redirects = [^0]')
+        | list
+      }}
+    ipv4_send_redirect_findings: >-
+      {{
+        network_sysctl_values.stdout_lines
+        | select('match', '^net\.ipv4\.conf\..*\.send_redirects = [^0]')
+        | list
+      }}
+    ipv6_forwarding_findings: >-
+      {{
+        network_sysctl_values.stdout_lines
+        | select('match', '^net\.ipv6\.conf\..*\.forwarding = [^0]')
+        | list
+      }}
+    ipv6_accept_redirect_findings: >-
+      {{
+        network_sysctl_values.stdout_lines
+        | select('match', '^net\.ipv6\.conf\..*\.accept_redirects = [^0]')
+        | list
+      }}
+
+- name: Evaluate network security compliance
+  ansible.builtin.set_fact:
+    ipv4_forwarding_status: >-
+      {{
+        'PASS' if ipv4_forwarding_findings | length == 0
+        else 'FAIL'
+      }}
+    ipv4_accept_redirect_status: >-
+      {{
+        'PASS' if ipv4_accept_redirect_findings | length == 0
+        else 'FAIL'
+      }}
+    ipv4_send_redirect_status: >-
+      {{
+        'PASS' if ipv4_send_redirect_findings | length == 0
+        else 'FAIL'
+      }}
+    ipv6_forwarding_status: >-
+      {{
+        'PASS' if ipv6_forwarding_findings | length == 0
+        else 'FAIL'
+      }}
+    ipv6_accept_redirect_status: >-
+      {{
+        'PASS' if ipv6_accept_redirect_findings | length == 0
+        else 'FAIL'
+      }}
+
+- name: Display network security compliance results
+  ansible.builtin.debug:
+    msg:
+      host: "{{ inventory_hostname }}"
+      ipv4:
+        forwarding:
+          status: "{{ ipv4_forwarding_status }}"
+          findings: "{{ ipv4_forwarding_findings }}"
+        accept_redirects:
+          status: "{{ ipv4_accept_redirect_status }}"
+          findings: "{{ ipv4_accept_redirect_findings }}"
+        send_redirects:
+          status: "{{ ipv4_send_redirect_status }}"
+          findings: "{{ ipv4_send_redirect_findings }}"
+      ipv6:
+        forwarding:
+          status: "{{ ipv6_forwarding_status }}"
+          findings: "{{ ipv6_forwarding_findings }}"
+        accept_redirects:
+          status: "{{ ipv6_accept_redirect_status }}"
+          findings: "{{ ipv6_accept_redirect_findings }}"
+      persistent_configuration:
+        configured_entries: "{{ persistent_network_config.stdout_lines }}"

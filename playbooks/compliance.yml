@@ -1,0 +1,40 @@
+
+---
+- name: Automated Security Compliance Enforcement
+  hosts: compliance_servers
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Validate compliance mode
+      ansible.builtin.assert:
+        that:
+          - compliance_mode in ['audit', 'remediate']
+        fail_msg: "Invalid compliance_mode. Use audit or remediate."
+        quiet: true
+      tags:
+        - always
+
+    - name: Run initial compliance audit
+      ansible.builtin.import_role:
+        name: compliance_checks
+      tags:
+        - audit
+        - ssh
+
+    - name: Remediate non-compliant SSH configuration
+      ansible.builtin.import_role:
+        name: compliance_remediation
+      when: compliance_mode == 'remediate'
+      tags:
+        - remediation
+        - ssh
+
+    - name: Run compliance audit after remediation
+      ansible.builtin.import_role:
+        name: compliance_checks
+      when: compliance_mode == 'remediate'
+      tags:
+        - remediation
+        - audit
+        - ssh

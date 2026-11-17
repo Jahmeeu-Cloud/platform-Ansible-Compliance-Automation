@@ -1,0 +1,33 @@
+
+---
+# File permissions security remediation
+
+- name: Enforce /etc/passwd ownership and permissions
+  ansible.builtin.file:
+    path: /etc/passwd
+    owner: root
+    group: root
+    mode: "{{ expected_passwd_mode }}"
+
+- name: Enforce /etc/shadow ownership and permissions
+  ansible.builtin.file:
+    path: /etc/shadow
+    owner: root
+    group: shadow
+    mode: "{{ expected_shadow_mode }}"
+
+- name: Find SSH host private keys
+  ansible.builtin.find:
+    paths: /etc/ssh
+    patterns: "ssh_host_*_key"
+    file_type: file
+    recurse: false
+  register: ssh_host_private_keys
+
+- name: Enforce SSH host private key ownership and permissions
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    owner: root
+    group: root
+    mode: "{{ expected_ssh_private_key_mode }}"
+  loop: "{{ ssh_host_private_keys.files }}"

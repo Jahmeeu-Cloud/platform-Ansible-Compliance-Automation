@@ -1,0 +1,14 @@
+---
+# Main compliance remediation entry point
+
+- name: Remediate SSH security configuration
+  ansible.builtin.import_tasks: ssh.yml
+
+- name: Remediate firewall security configuration
+  ansible.builtin.import_tasks: firewall.yml
+
+- name: Remediate file permission security
+  ansible.builtin.import_tasks: permissions.yml
+
+- name: Remediate network security configuration
+  ansible.builtin.import_tasks: network.yml

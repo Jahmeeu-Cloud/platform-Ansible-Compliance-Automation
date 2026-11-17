@@ -1,0 +1,83 @@
+
+---
+# File permissions security audit
+
+# 1. Inspect /etc/passwd
+- name: Inspect /etc/passwd permissions
+  ansible.builtin.stat:
+    path: /etc/passwd
+  register: passwd_file
+
+# 2. Inspect /etc/shadow
+- name: Inspect /etc/shadow permissions
+  ansible.builtin.stat:
+    path: /etc/shadow
+  register: shadow_file
+
+# 3. Find SSH host private keys
+- name: Find SSH host private keys
+  ansible.builtin.find:
+    paths: /etc/ssh
+    patterns: "ssh_host_*_key"
+    file_type: file
+    recurse: false
+  register: ssh_host_private_keys
+
+# 4. Evaluate file permissions
+- name: Evaluate file permission compliance
+  ansible.builtin.set_fact:
+    passwd_permissions_status: >-
+      {{
+        'PASS'
+        if passwd_file.stat.exists
+        and passwd_file.stat.pw_name == 'root'
+        and passwd_file.stat.mode == expected_passwd_mode
+        else 'FAIL'
+      }}
+
+    shadow_permissions_status: >-
+      {{
+        'PASS'
+        if shadow_file.stat.exists
+        and shadow_file.stat.pw_name == 'root'
+        and shadow_file.stat.mode == expected_shadow_mode
+        else 'FAIL'
+      }}
+
+    ssh_private_keys_status: >-
+      {{
+        'ERROR'
+        if ssh_host_private_keys.matched == 0
+        else 'PASS'
+        if (
+          ssh_host_private_keys.files
+          | selectattr('mode', 'ne', expected_ssh_private_key_mode)
+          | list
+          | length == 0
+        )
+        and (
+          ssh_host_private_keys.files
+          | selectattr('pw_name', 'ne', 'root')
+          | list
+          | length == 0
+        )
+        else 'FAIL'
+      }}
+
+# 5. Display results
+- name: Display file permission compliance results
+  ansible.builtin.debug:
+    msg:
+      host: "{{ inventory_hostname }}"
+      passwd:
+        actual_mode: "{{ passwd_file.stat.mode | default('missing') }}"
+        expected_mode: "{{ expected_passwd_mode }}"
+        status: "{{ passwd_permissions_status }}"
+      shadow:
+        actual_mode: "{{ shadow_file.stat.mode | default('missing') }}"
+        expected_mode: "{{ expected_shadow_mode }}"
+        status: "{{ shadow_permissions_status }}"
+      ssh_private_keys:
+        discovered: "{{ ssh_host_private_keys.matched }}"
+        actual_modes: "{{ ssh_host_private_keys.files | map(attribute='mode') | list }}"
+        status: "{{ ssh_private_keys_status }}"

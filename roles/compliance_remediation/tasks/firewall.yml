@@ -1,0 +1,28 @@
+
+---
+# Firewall security remediation
+- name: Verify OpenSSH application profile exists
+  ansible.builtin.command:
+    cmd: ufw app info OpenSSH
+  register: ufw_ssh_profile
+  changed_when: false
+  check_mode: false
+
+- name: Ensure SSH traffic is allowed before enabling UFW
+  community.general.ufw:
+    rule: allow
+    name: OpenSSH
+
+- name: Set default incoming traffic policy to deny
+  community.general.ufw:
+    direction: incoming
+    policy: deny
+
+- name: Set default outgoing traffic policy to allow
+  community.general.ufw:
+    direction: outgoing
+    policy: allow
+
+- name: Enable UFW firewall
+  community.general.ufw:
+    state: enabled

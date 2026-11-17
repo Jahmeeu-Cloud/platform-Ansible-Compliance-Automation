@@ -1,0 +1,83 @@
+
+# ==========================================
+# Sensitive credentials and private keys
+# ==========================================
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.ppk
+id_rsa
+id_ed25519
+id_ecdsa
+.ssh/
+secrets/
+credentials/
+vault-password*
+.vault_pass*
+*password*
+*credentials*
+
+# Ansible Vault and secret variables
+vault.yml
+vault.yaml
+secrets.yml
+secrets.yaml
+group_vars/*/vault.yml
+host_vars/*/vault.yml
+
+# ==========================================
+# Ansible temporary files
+# ==========================================
+*.retry
+*.log
+*.tmp
+ansible.log
+
+# ==========================================
+# Python generated files
+# ==========================================
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+env/
+
+# ==========================================
+# Terraform state and credentials
+# ==========================================
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl.backup
+*.tfvars
+!*.tfvars.example
+crash.log
+override.tf
+override.tf.json
+
+# ==========================================
+# Operating system and editor files
+# ==========================================
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ==========================================
+# Generated reports and temporary output
+# ==========================================
+*.bak
+*.backup
+*.old
+
+
+# Private infrastructure inventory
+inventory/hosts.private.ini

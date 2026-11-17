@@ -1,0 +1,101 @@
+
+---
+# System logging and journal compliance audit
+
+- name: Check rsyslog service state
+  ansible.builtin.command:
+    cmd: systemctl is-active rsyslog
+  register: rsyslog_active
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Check rsyslog service enablement
+  ansible.builtin.command:
+    cmd: systemctl is-enabled rsyslog
+  register: rsyslog_enabled
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Check systemd-journald service state
+  ansible.builtin.command:
+    cmd: systemctl is-active systemd-journald
+  register: journald_active
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Inspect persistent journal directory
+  ansible.builtin.stat:
+    path: /var/log/journal
+  register: journal_directory
+
+- name: Inspect journal disk usage
+  ansible.builtin.command:
+    cmd: journalctl --disk-usage
+  register: journal_disk_usage
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Inspect effective journald syslog forwarding configuration
+  ansible.builtin.shell:
+    cmd: |
+      systemd-analyze cat-config systemd/journald.conf |
+      awk '/^[[:space:]]*ForwardToSyslog=/ { value=$0 } END { print value }'
+  register: journald_syslog_forwarding
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Evaluate logging compliance
+  ansible.builtin.set_fact:
+    rsyslog_active_status: >-
+      {{
+        'PASS' if rsyslog_active.stdout | trim == 'active'
+        else 'FAIL'
+      }}
+    rsyslog_enabled_status: >-
+      {{
+        'PASS' if rsyslog_enabled.stdout | trim == 'enabled'
+        else 'FAIL'
+      }}
+    journald_active_status: >-
+      {{
+        'PASS' if journald_active.stdout | trim == 'active'
+        else 'FAIL'
+      }}
+    persistent_journal_status: >-
+      {{
+        'PASS' if journal_directory.stat.exists
+        and journal_directory.stat.isdir
+        else 'FAIL'
+      }}
+    syslog_forwarding_status: >-
+      {{
+        'PASS'
+        if journald_syslog_forwarding.stdout | trim
+        == 'ForwardToSyslog=yes'
+        else 'FAIL'
+      }}
+
+- name: Display logging compliance results
+  ansible.builtin.debug:
+    msg:
+      host: "{{ inventory_hostname }}"
+      rsyslog:
+        active: "{{ rsyslog_active.stdout | trim }}"
+        active_status: "{{ rsyslog_active_status }}"
+        enabled: "{{ rsyslog_enabled.stdout | trim }}"
+        enabled_status: "{{ rsyslog_enabled_status }}"
+      journald:
+        active: "{{ journald_active.stdout | trim }}"
+        active_status: "{{ journald_active_status }}"
+        persistent_storage:
+          directory_exists: "{{ journal_directory.stat.exists }}"
+          status: "{{ persistent_journal_status }}"
+        disk_usage: "{{ journal_disk_usage.stdout | default('Unavailable') }}"
+        syslog_forwarding:
+          configuration: "{{ journald_syslog_forwarding.stdout | trim }}"
+          status: "{{ syslog_forwarding_status }}"

@@ -1,0 +1,80 @@
+
+---
+# SSH security audit
+
+- name: Inspect effective SSH configuration
+  ansible.builtin.shell:
+    cmd: |
+      /usr/sbin/sshd -T | awk '
+        $1 == "permitrootlogin" ||
+        $1 == "passwordauthentication" ||
+        $1 == "maxauthtries" {
+          print $1 "=" $2
+        }
+      '
+  register: ssh_effective_config
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Extract effective SSH settings
+  ansible.builtin.set_fact:
+    ssh_root_login_actual: >-
+      {{
+        'disabled'
+        if 'permitrootlogin=no' in ssh_effective_config.stdout
+        else 'enabled'
+        if (
+          'permitrootlogin=yes' in ssh_effective_config.stdout
+          or 'permitrootlogin=without-password' in ssh_effective_config.stdout
+          or 'permitrootlogin=prohibit-password' in ssh_effective_config.stdout
+        )
+        else 'unknown'
+      }}
+    ssh_password_auth_actual: >-
+      {{
+        'disabled'
+        if 'passwordauthentication=no' in ssh_effective_config.stdout
+        else 'enabled'
+        if 'passwordauthentication=yes' in ssh_effective_config.stdout
+        else 'unknown'
+      }}
+    ssh_max_auth_tries_actual: >-
+      {{
+        ssh_effective_config.stdout
+        | regex_findall('(?m)^maxauthtries=(\S+)$')
+        | first
+        | default('unknown')
+      }}
+
+- name: Evaluate SSH compliance
+  ansible.builtin.set_fact:
+    ssh_root_login_status: >-
+      {{
+        'ERROR' if ssh_effective_config.rc != 0 or ssh_root_login_actual == 'unknown'
+        else 'PASS' if ssh_root_login_actual == 'disabled'
+        else 'FAIL'
+      }}
+    ssh_password_auth_status: >-
+      {{
+        'ERROR' if ssh_effective_config.rc != 0 or ssh_password_auth_actual == 'unknown'
+        else 'PASS' if ssh_password_auth_actual == 'disabled'
+        else 'FAIL'
+      }}
+    ssh_max_auth_tries_status: >-
+      {{
+        'ERROR' if ssh_effective_config.rc != 0 or ssh_max_auth_tries_actual == 'unknown'
+        else 'PASS' if ssh_max_auth_tries_actual == (ssh_expected_max_auth_tries | string)
+        else 'FAIL'
+      }}
+
+- name: Display SSH compliance results
+  ansible.builtin.debug:
+    msg:
+      host: "{{ inventory_hostname }}"
+      root_login: "{{ ssh_root_login_status }}"
+      root_login_actual: "{{ ssh_root_login_actual }}"
+      password_authentication: "{{ ssh_password_auth_status }}"
+      password_authentication_actual: "{{ ssh_password_auth_actual }}"
+      max_auth_tries: "{{ ssh_max_auth_tries_status }}"
+      max_auth_tries_actual: "{{ ssh_max_auth_tries_actual }}"

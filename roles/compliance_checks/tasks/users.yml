@@ -1,0 +1,103 @@
+
+---
+# User account security audit
+
+# 1. Validate sudoers configuration before evaluating compliance
+- name: Validate sudoers configuration
+  ansible.builtin.command:
+    cmd: visudo -c
+  register: sudoers_validation
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+# 2. Inspect accounts with empty password fields
+- name: Inspect accounts with empty password fields
+  ansible.builtin.command:
+    cmd: "awk -F: '($2 == \"\") {print $1}' /etc/shadow"
+  register: empty_password_accounts
+  changed_when: false
+  check_mode: false
+
+# 3. Inspect sudo group membership
+- name: Inspect sudo group membership
+  ansible.builtin.command:
+    cmd: getent group sudo
+  register: sudo_group_output
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+# 4. Inspect admin group membership
+- name: Inspect admin group membership
+  ansible.builtin.command:
+    cmd: getent group admin
+  register: admin_group_output
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+# 5. Extract sudo and admin group members
+- name: Extract sudo and admin group members
+  ansible.builtin.set_fact:
+    sudo_group_members: >-
+      {{
+        sudo_group_output.stdout.split(':')[3].split(',')
+        if sudo_group_output.rc == 0
+        and sudo_group_output.stdout.split(':') | length > 3
+        and sudo_group_output.stdout.split(':')[3] | length > 0
+        else []
+      }}
+    admin_group_members: >-
+      {{
+        admin_group_output.stdout.split(':')[3].split(',')
+        if admin_group_output.rc == 0
+        and admin_group_output.stdout.split(':') | length > 3
+        and admin_group_output.stdout.split(':')[3] | length > 0
+        else []
+      }}
+
+# 6. Identify unauthorized sudo group members
+- name: Identify unauthorized sudo group members
+  ansible.builtin.set_fact:
+    unauthorized_sudo_users: >-
+      {{
+        (
+          sudo_group_members
+          + admin_group_members
+        )
+        | unique
+        | difference(authorized_sudo_users)
+      }}
+
+# 7. Evaluate user account compliance
+- name: Evaluate user account compliance
+  ansible.builtin.set_fact:
+    empty_password_status: >-
+      {{
+        'FAIL' if empty_password_accounts.stdout_lines | length > 0
+        else 'PASS'
+      }}
+    sudo_authorization_status: >-
+      {{
+        'FAIL' if unauthorized_sudo_users | length > 0
+        else 'PASS'
+      }}
+    sudoers_syntax_status: >-
+      {{
+        'PASS' if sudoers_validation.rc == 0
+        else 'FAIL'
+      }}
+
+# 8. Display user security compliance results
+- name: Display user security compliance results
+  ansible.builtin.debug:
+    msg:
+      host: "{{ inventory_hostname }}"
+      empty_password_accounts: "{{ empty_password_accounts.stdout_lines }}"
+      empty_password_status: "{{ empty_password_status }}"
+      sudo_group_members: "{{ sudo_group_members }}"
+      admin_group_members: "{{ admin_group_members }}"
+      unauthorized_sudo_users: "{{ unauthorized_sudo_users }}"
+      sudo_authorization_status: "{{ sudo_authorization_status }}"
+      sudoers_syntax: "{{ sudoers_syntax_status }}"

@@ -1,0 +1,26 @@
+---
+# Main compliance audit entry point
+
+- name: Audit SSH security configuration
+  ansible.builtin.import_tasks: ssh.yml
+
+- name: Audit firewall security configuration
+  ansible.builtin.import_tasks: firewall.yml
+
+- name: Audit user account security
+  ansible.builtin.import_tasks: users.yml
+
+- name: Audit file permission security
+  ansible.builtin.import_tasks: permissions.yml
+
+- name: Audit legacy network services
+  ansible.builtin.import_tasks: services.yml
+
+- name: Audit system package updates
+  ansible.builtin.import_tasks: updates.yml
+
+- name: Audit system logging configuration
+  ansible.builtin.import_tasks: logging.yml
+
+- name: Audit network security configuration
+  ansible.builtin.import_tasks: network.yml

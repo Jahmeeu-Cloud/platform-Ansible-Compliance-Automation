@@ -1,0 +1,105 @@
+
+---
+# Legacy network service compliance audit
+
+# 1. Gather installed package information
+- name: Gather installed package information
+  ansible.builtin.package_facts:
+    manager: auto
+
+# 2. Define prohibited legacy server packages
+- name: Define prohibited legacy server packages
+  ansible.builtin.set_fact:
+    prohibited_service_packages:
+      - telnetd
+      - rsh-server
+      - rsh-redone-server
+      - rlogin
+      - inetutils-inetd
+      - openbsd-inetd
+      - xinetd
+
+# 3. Identify installed prohibited packages
+- name: Identify installed prohibited packages
+  ansible.builtin.set_fact:
+    installed_prohibited_packages: >-
+      {{
+        prohibited_service_packages
+        | intersect(ansible_facts.packages.keys() | list)
+      }}
+
+# 4. Inspect legacy systemd service units
+- name: Inspect legacy service units
+  ansible.builtin.shell:
+    cmd: |
+      systemctl list-units --type=service --all --no-legend |
+      grep -Ei 'telnet|rsh|rlogin' || true
+  register: legacy_service_units
+  changed_when: false
+  check_mode: false
+
+# 5. Inspect legacy systemd socket units
+- name: Inspect legacy socket units
+  ansible.builtin.shell:
+    cmd: |
+      systemctl list-unit-files --type=socket --no-legend |
+      grep -Ei 'telnet|rsh|rlogin' || true
+  register: legacy_socket_units
+  changed_when: false
+  check_mode: false
+
+# 6. Inspect legacy listening ports
+- name: Inspect legacy listening ports
+  ansible.builtin.shell:
+    cmd: |
+      ss -lntup |
+      grep -E ':(23|513|514)[[:space:]]' || true
+  register: legacy_listening_ports
+  changed_when: false
+  check_mode: false
+
+# 7. Evaluate legacy service compliance
+- name: Evaluate legacy service compliance
+  ansible.builtin.set_fact:
+    legacy_packages_status: >-
+      {{
+        'FAIL'
+        if installed_prohibited_packages | length > 0
+        else 'PASS'
+      }}
+    legacy_service_units_status: >-
+      {{
+        'FAIL'
+        if legacy_service_units.stdout | trim | length > 0
+        else 'PASS'
+      }}
+    legacy_socket_units_status: >-
+      {{
+        'FAIL'
+        if legacy_socket_units.stdout | trim | length > 0
+        else 'PASS'
+      }}
+    legacy_listening_ports_status: >-
+      {{
+        'FAIL'
+        if legacy_listening_ports.stdout | trim | length > 0
+        else 'PASS'
+      }}
+
+# 8. Display service compliance results
+- name: Display legacy service compliance results
+  ansible.builtin.debug:
+    msg:
+      host: "{{ inventory_hostname }}"
+      prohibited_packages:
+        installed: "{{ installed_prohibited_packages }}"
+        status: "{{ legacy_packages_status }}"
+      legacy_services:
+        status: "{{ legacy_service_units_status }}"
+        details: "{{ legacy_service_units.stdout_lines }}"
+      legacy_sockets:
+        status: "{{ legacy_socket_units_status }}"
+        details: "{{ legacy_socket_units.stdout_lines }}"
+      listening_ports:
+        status: "{{ legacy_listening_ports_status }}"
+        details: "{{ legacy_listening_ports.stdout_lines }}"

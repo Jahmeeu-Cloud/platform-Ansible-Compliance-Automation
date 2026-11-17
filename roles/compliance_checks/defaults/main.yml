@@ -1,0 +1,21 @@
+
+---
+# SSH compliance defaults
+
+ssh_expected_root_login: "no"
+ssh_expected_password_authentication: "no"
+ssh_expected_max_auth_tries: 4
+
+# User security compliance defaults
+
+authorized_sudo_users:
+  - ubuntu
+
+authorized_sudo_groups:
+  - sudo
+
+# File permission compliance defaults
+expected_passwd_mode: "0644"
+expected_shadow_mode: "0600"
+expected_ssh_private_key_mode: "0600"
+

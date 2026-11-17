@@ -1,0 +1,85 @@
+
+---
+# SSH security remediation with backup and rollback
+
+- name: Create backup directory for SSH configuration
+  ansible.builtin.file:
+    path: /etc/ssh/ansible-backups
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+
+- name: Check whether an Ansible-managed SSH configuration already exists
+  ansible.builtin.stat:
+    path: /etc/ssh/sshd_config.d/00-ansible-compliance.conf
+  register: ssh_managed_config_stat
+
+- name: Back up existing Ansible-managed SSH configuration
+  ansible.builtin.copy:
+    src: /etc/ssh/sshd_config.d/00-ansible-compliance.conf
+    dest: /etc/ssh/ansible-backups/00-ansible-compliance.conf
+    remote_src: true
+    mode: preserve
+  when: ssh_managed_config_stat.stat.exists
+
+- name: Apply and validate SSH security baseline
+  block:
+
+    - name: Apply SSH security baseline
+      ansible.builtin.copy:
+        dest: /etc/ssh/sshd_config.d/00-ansible-compliance.conf
+        owner: root
+        group: root
+        mode: '0644'
+        content: |
+          # Managed by Ansible - Automated Compliance Enforcement
+          PermitRootLogin no
+          PasswordAuthentication no
+          MaxAuthTries 4
+      register: ssh_baseline_result
+
+    - name: Validate SSH configuration
+      ansible.builtin.command:
+        cmd: /usr/sbin/sshd -t
+      changed_when: false
+      check_mode: false
+
+    - name: Reload SSH after successful validation
+      ansible.builtin.systemd_service:
+        name: ssh
+        state: reloaded
+      when: ssh_baseline_result.changed
+
+  rescue:
+
+    - name: Restore previous SSH configuration
+      ansible.builtin.copy:
+        src: /etc/ssh/ansible-backups/00-ansible-compliance.conf
+        dest: /etc/ssh/sshd_config.d/00-ansible-compliance.conf
+        remote_src: true
+        mode: preserve
+      when: ssh_managed_config_stat.stat.exists
+
+    - name: Remove invalid SSH configuration when no previous file existed
+      ansible.builtin.file:
+        path: /etc/ssh/sshd_config.d/00-ansible-compliance.conf
+        state: absent
+      when: not ssh_managed_config_stat.stat.exists
+
+    - name: Validate restored SSH configuration
+      ansible.builtin.command:
+        cmd: /usr/sbin/sshd -t
+      changed_when: false
+      check_mode: false
+
+    - name: Reload restored SSH configuration
+      ansible.builtin.systemd_service:
+        name: ssh
+        state: reloaded
+
+    - name: Report SSH remediation failure
+      ansible.builtin.fail:
+        msg: >-
+          SSH remediation failed. The previous managed configuration
+          was restored where available. Investigate the validation error.

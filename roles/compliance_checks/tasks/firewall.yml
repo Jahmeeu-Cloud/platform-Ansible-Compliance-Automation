@@ -1,0 +1,82 @@
+
+---
+# Firewall security audit
+
+- name: Gather installed package information
+  ansible.builtin.package_facts:
+    manager: auto
+
+- name: Check whether UFW is installed
+  ansible.builtin.set_fact:
+    ufw_installed: "{{ 'ufw' in ansible_facts.packages }}"
+
+- name: Inspect UFW firewall status
+  ansible.builtin.command:
+    cmd: ufw status verbose
+  register: ufw_status_output
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: ufw_installed
+
+- name: Inspect UFW default incoming policy
+  ansible.builtin.command:
+    cmd: grep '^DEFAULT_INPUT_POLICY=' /etc/default/ufw
+  register: ufw_default_policy_output
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: ufw_installed
+
+- name: Extract firewall configuration
+  ansible.builtin.set_fact:
+    ufw_status_actual: >-
+      {{
+        'active'
+        if 'Status: active' in ufw_status_output.stdout
+        else 'inactive'
+        if 'Status: inactive' in ufw_status_output.stdout
+        else 'unknown'
+      }}
+    ufw_default_incoming_actual: >-
+      {{
+        'deny'
+        if (
+          'DEFAULT_INPUT_POLICY="DROP"' in ufw_default_policy_output.stdout
+          or 'DEFAULT_INPUT_POLICY="REJECT"' in ufw_default_policy_output.stdout
+          or 'Default: deny (incoming)' in ufw_status_output.stdout
+        )
+        else 'allow'
+        if (
+          'DEFAULT_INPUT_POLICY="ACCEPT"' in ufw_default_policy_output.stdout
+          or 'Default: allow (incoming)' in ufw_status_output.stdout
+        )
+        else 'unknown'
+      }}
+  when: ufw_installed
+
+- name: Evaluate firewall compliance
+  ansible.builtin.set_fact:
+    ufw_installation_status: "{{ 'PASS' if ufw_installed else 'FAIL' }}"
+    ufw_enabled_status: >-
+      {{
+        'ERROR' if not ufw_installed or ufw_status_actual == 'unknown'
+        else 'PASS' if ufw_status_actual == 'active'
+        else 'FAIL'
+      }}
+    ufw_default_incoming_status: >-
+      {{
+        'ERROR' if not ufw_installed or ufw_default_incoming_actual == 'unknown'
+        else 'PASS' if ufw_default_incoming_actual == 'deny'
+        else 'FAIL'
+      }}
+
+- name: Display firewall compliance results
+  ansible.builtin.debug:
+    msg:
+      host: "{{ inventory_hostname }}"
+      ufw_installed: "{{ ufw_installation_status }}"
+      ufw_enabled: "{{ ufw_enabled_status }}"
+      ufw_status_actual: "{{ ufw_status_actual | default('not installed') }}"
+      default_incoming: "{{ ufw_default_incoming_status }}"
+      default_incoming_actual: "{{ ufw_default_incoming_actual | default('not installed') }}"
